@@ -4,6 +4,11 @@ import { gql } from '@apollo/client/core';
 import { Observable, map, catchError, throwError, of, tap } from 'rxjs';
 import { Board, Card, Column } from '../models/board.model';
 import { AuthService } from './auth.service';
+import { MutationResult } from 'apollo-angular';
+
+type ApolloMutationResult<T> = MutationResult<T> & {
+  data?: T;
+};
 
 // Definição de queries GraphQL
 const GET_BOARDS = gql`
@@ -326,8 +331,8 @@ const MOVE_CARD = gql`
 `;
 
 const RESET_BOARD = gql`
-  mutation ResetBoard($id: String!) {
-    resetBoard(id: $id) {
+  mutation ResetBoard($id: String!, $title: String!) {
+    resetBoard(id: $id, title: $title) {
       id
       title
       userId
@@ -519,20 +524,22 @@ export class BoardGraphqlService {
     return this.apollo.mutate<{ createBoard: Board }>({
       mutation: CREATE_BOARD,
       variables: {
-        input: { title }
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error('Erro ao criar board:', result.errors);
-          throw new Error(`Erro ao criar board: ${result.errors[0].message}`);
+        input: {
+          title
         }
-        console.log('Board criado:', result.data?.createBoard);
-        return result.data!.createBoard;
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ createBoard: Board }>) => {
+        if (!result.data?.createBoard) {
+          throw new Error('Erro ao criar board: Dados não retornados');
+        }
+        console.log('Board criado:', result.data.createBoard);
+        return result.data.createBoard;
       }),
-      catchError(this.handleError('createBoard'))
+      catchError(error => {
+        console.error('Erro ao criar board:', error);
+        return throwError(() => error);
+      })
     );
   }
 
@@ -542,19 +549,19 @@ export class BoardGraphqlService {
       variables: {
         id,
         input
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao atualizar board ${id}:`, result.errors);
-          throw new Error(`Erro ao atualizar board: ${result.errors[0].message}`);
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ updateBoard: Board }>) => {
+        if (!result.data?.updateBoard) {
+          throw new Error('Erro ao atualizar board: Dados não retornados');
         }
-        console.log('Board atualizado:', result.data?.updateBoard);
-        return result.data!.updateBoard;
+        console.log('Board atualizado:', result.data.updateBoard);
+        return result.data.updateBoard;
       }),
-      catchError(this.handleError('updateBoard'))
+      catchError(error => {
+        console.error(`Erro ao atualizar board ${id}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
@@ -564,50 +571,42 @@ export class BoardGraphqlService {
       variables: {
         boardId,
         input: column
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao adicionar coluna ao board ${boardId}:`, result.errors);
-          throw new Error(`Erro ao adicionar coluna: ${result.errors[0].message}`);
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ addColumn: Board }>) => {
+        if (!result.data?.addColumn) {
+          throw new Error('Erro ao adicionar coluna: Dados não retornados');
         }
-        console.log('Coluna adicionada:', result.data?.addColumn);
-        return result.data!.addColumn;
+        console.log('Coluna adicionada:', result.data.addColumn);
+        return result.data.addColumn;
       }),
-      catchError(this.handleError('addColumn'))
+      catchError(error => {
+        console.error(`Erro ao adicionar coluna ao board ${boardId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
   updateColumn(boardId: string, columnId: string, column: Partial<Column>): Observable<Board> {
-    // Preparar o objeto de entrada com o ID da coluna
-    const input = {
-      id: columnId,
-      ...column
-    };
-    
-    console.log(`Atualizando coluna ${columnId} no board ${boardId}:`, input);
-    
     return this.apollo.mutate<{ updateColumn: Board }>({
       mutation: UPDATE_COLUMN,
       variables: {
         boardId,
         columnId,
-        input
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao atualizar coluna ${columnId}:`, result.errors);
-          throw new Error(`Erro ao atualizar coluna: ${result.errors[0].message}`);
+        input: column
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ updateColumn: Board }>) => {
+        if (!result.data?.updateColumn) {
+          throw new Error('Erro ao atualizar coluna: Dados não retornados');
         }
-        console.log('Coluna atualizada:', result.data?.updateColumn);
-        return result.data!.updateColumn;
+        console.log('Coluna atualizada:', result.data.updateColumn);
+        return result.data.updateColumn;
       }),
-      catchError(this.handleError('updateColumn'))
+      catchError(error => {
+        console.error(`Erro ao atualizar coluna ${columnId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
@@ -617,19 +616,19 @@ export class BoardGraphqlService {
       variables: {
         boardId,
         columnId
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao excluir coluna ${columnId}:`, result.errors);
-          throw new Error(`Erro ao excluir coluna: ${result.errors[0].message}`);
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ deleteColumn: Board }>) => {
+        if (!result.data?.deleteColumn) {
+          throw new Error('Erro ao excluir coluna: Dados não retornados');
         }
-        console.log('Coluna excluída:', result.data?.deleteColumn);
-        return result.data!.deleteColumn;
+        console.log('Coluna excluída:', result.data.deleteColumn);
+        return result.data.deleteColumn;
       }),
-      catchError(this.handleError('deleteColumn'))
+      catchError(error => {
+        console.error(`Erro ao excluir coluna ${columnId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
@@ -705,126 +704,77 @@ export class BoardGraphqlService {
     return serialized;
   }
 
-  addCard(
-    boardId: string,
-    columnId: string,
-    card: Omit<Card, 'id'>
-  ): Observable<Board> {
-    console.log(`Adicionando card à coluna ${columnId} no board ${boardId}:`, card);
-    
-    // Serializar o card antes de enviar
-    const serializedCard = this.serializeCard(card);
-    
+  addCard(boardId: string, columnId: string, card: Omit<Card, 'id'>): Observable<Board> {
     return this.apollo.mutate<{ addCard: Board }>({
       mutation: ADD_CARD,
       variables: {
         boardId,
         columnId,
-        input: serializedCard
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao adicionar card na coluna ${columnId}:`, result.errors);
-          throw new Error(`Erro ao adicionar card: ${result.errors[0].message}`);
+        input: this.serializeCard(card)
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ addCard: Board }>) => {
+        if (!result.data?.addCard) {
+          throw new Error('Erro ao adicionar card: Dados não retornados');
         }
-        console.log('Card adicionado:', result.data?.addCard);
-        return result.data!.addCard;
+        console.log('Card adicionado:', result.data.addCard);
+        return result.data.addCard;
       }),
-      catchError(this.handleError('addCard'))
+      catchError(error => {
+        console.error(`Erro ao adicionar card na coluna ${columnId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
-  updateCard(
-    boardId: string,
-    columnId: string,
-    cardId: string,
-    card: Partial<Card>
-  ): Observable<Board> {
-    console.log(`Atualizando card ${cardId} na coluna ${columnId} no board ${boardId}:`, card);
-    
-    // Serializar o card antes de enviar
-    const serializedCard = this.serializeCard(card);
-    
+  updateCard(boardId: string, columnId: string, cardId: string, card: Partial<Card>): Observable<Board> {
     return this.apollo.mutate<{ updateCard: Board }>({
       mutation: UPDATE_CARD,
       variables: {
         boardId,
         columnId,
         cardId,
-        input: serializedCard
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao atualizar card ${cardId}:`, result.errors);
-          throw new Error(`Erro ao atualizar card: ${result.errors[0].message}`);
+        input: this.serializeCard(card)
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ updateCard: Board }>) => {
+        if (!result.data?.updateCard) {
+          throw new Error('Erro ao atualizar card: Dados não retornados');
         }
-        console.log('Card atualizado:', result.data?.updateCard);
-        return result.data!.updateCard;
+        console.log('Card atualizado:', result.data.updateCard);
+        return result.data.updateCard;
       }),
-      catchError(this.handleError('updateCard'))
+      catchError(error => {
+        console.error(`Erro ao atualizar card ${cardId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
-  deleteCard(
-    boardId: string,
-    columnId: string,
-    cardId: string
-  ): Observable<Board> {
-    console.log(`GraphQL: Enviando requisição para excluir card ${cardId} da coluna ${columnId} no board ${boardId}`);
-    
+  deleteCard(boardId: string, columnId: string, cardId: string): Observable<Board> {
     return this.apollo.mutate<{ deleteCard: Board }>({
       mutation: DELETE_CARD,
       variables: {
         boardId,
         columnId,
         cardId
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          const errorMsg = result.errors.map(e => e.message).join('; ');
-          console.error(`Erro ao excluir card ${cardId}:`, result.errors);
-          throw new Error(`Erro ao excluir card: ${errorMsg}`);
-        }
-        
-        // Verificar se o resultado é válido
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ deleteCard: Board }>) => {
         if (!result.data?.deleteCard) {
-          console.error('Resposta vazia ao excluir card');
-          throw new Error('Resposta vazia do servidor ao excluir card');
+          throw new Error('Erro ao excluir card: Dados não retornados');
         }
-        
-        console.log(`Card ${cardId} excluído com sucesso. Board retornado:`, result.data.deleteCard);
-        
-        // Processar datas do board retornado
-        const processedBoard = this.processDatesInBoard(result.data.deleteCard);
-        
-        return processedBoard;
+        console.log('Card excluído com sucesso. Board retornado:', result.data.deleteCard);
+        return this.processDatesInBoard(result.data.deleteCard);
       }),
       catchError(error => {
         console.error(`Erro ao excluir card ${cardId}:`, error);
-        throw error;
+        return throwError(() => error);
       })
     );
   }
 
-  moveCard(
-    boardId: string,
-    sourceColumnId: string,
-    targetColumnId: string,
-    cardId: string,
-    newOrder: number
-  ): Observable<Board> {
-    // Verificar e converter objetos de data para string antes de enviar
-    console.log('Enviando requisição moveCard para o GraphQL');
-    
+  moveCard(boardId: string, sourceColumnId: string, targetColumnId: string, cardId: string, newOrder: number): Observable<Board> {
     return this.apollo.mutate<{ moveCard: Board }>({
       mutation: MOVE_CARD,
       variables: {
@@ -833,113 +783,39 @@ export class BoardGraphqlService {
         targetColumnId,
         cardId,
         newOrder
-      },
-      errorPolicy: 'all'
-    })
-    .pipe(
-      map(result => {
-        if (result.errors) {
-          console.error(`Erro ao mover card ${cardId}:`, result.errors);
-          throw new Error(`Erro ao mover card: ${result.errors[0].message}`);
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ moveCard: Board }>) => {
+        if (!result.data?.moveCard) {
+          throw new Error('Erro ao mover card: Dados não retornados');
         }
-        
-        // Processar datas no resultado
-        const processedBoard = this.processDatesInBoard(result.data!.moveCard);
-        
-        console.log('Card movido com sucesso no GraphQL');
-        return processedBoard;
+        return this.processDatesInBoard(result.data.moveCard);
       }),
-      catchError(this.handleError('moveCard'))
+      catchError(error => {
+        console.error(`Erro ao mover card ${cardId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 
   resetBoard(boardId: string, boardTitle: string): Observable<Board> {
-    console.log('RESETBOARD: Iniciando reset do board', boardId, 'com título', boardTitle);
-    
     return this.apollo.mutate<{ resetBoard: Board }>({
       mutation: RESET_BOARD,
       variables: {
-        id: boardId
-      },
-      errorPolicy: 'all',
-      fetchPolicy: 'no-cache' // Evitar cache para garantir que sempre busque do servidor
-    })
-    .pipe(
-      tap(result => {
-        if (result.errors) {
-          console.error(`RESETBOARD: Erro ao resetar board ${boardId}:`, result.errors);
-        } else {
-          console.log('RESETBOARD: Resposta recebida com sucesso:', result.data?.resetBoard);
+        boardId,
+        boardTitle
+      }
+    }).pipe(
+      map((result: ApolloMutationResult<{ resetBoard: Board }>) => {
+        if (!result.data?.resetBoard) {
+          throw new Error('Erro ao resetar board: Dados não retornados');
         }
-      }),
-      map(result => {
-        if (result.errors) {
-          console.error(`RESETBOARD: Erro ao resetar board ${boardId}:`, result.errors);
-          throw new Error(`Erro ao resetar board: ${result.errors[0].message}`);
-        }
-        
-        if (!result.data || !result.data.resetBoard) {
-          console.error('RESETBOARD: Resposta inválida do servidor');
-          throw new Error('Resposta inválida do servidor ao resetar o board');
-        }
-        
-        console.log('RESETBOARD: Board resetado com sucesso no GraphQL');
-        
-        // Processar datas no resultado
-        const processedBoard = this.processDatesInBoard(result.data.resetBoard);
-        
-        // Garantir que as colunas estão vazias
-        if (processedBoard.columns && processedBoard.columns.length > 0) {
-          console.warn('RESETBOARD: Board ainda contém colunas após reset, forçando limpeza');
-          processedBoard.columns = [];
-        }
-        
-        return processedBoard;
+        console.log('RESETBOARD: Resposta recebida com sucesso:', result.data.resetBoard);
+        return this.processDatesInBoard(result.data.resetBoard);
       }),
       catchError(error => {
-        console.error('RESETBOARD: Erro durante reset do board:', error);
-        // Tentar uma segunda vez em caso de erro, com uma abordagem mais simples usando updateBoard
-        if (error.networkError || !error.graphQLErrors) {
-          console.warn('RESETBOARD: Erro detectado, tentando abordagem alternativa com updateBoard');
-          
-          // Usar updateBoard como fallback
-          return this.apollo.mutate<{ updateBoard: Board }>({
-            mutation: UPDATE_BOARD,
-            variables: {
-              id: boardId,
-              input: {
-                title: boardTitle,
-                columns: [] // Enviar array vazio de colunas
-              }
-            }
-          }).pipe(
-            map(fallbackResult => {
-              if (fallbackResult.data?.updateBoard) {
-                console.log('RESETBOARD: Resetado com sucesso usando método alternativo');
-                return {
-                  ...fallbackResult.data.updateBoard,
-                  columns: []
-                };
-              }
-              throw new Error('Falha na abordagem alternativa de reset');
-            }),
-            catchError(() => {
-              // Se a segunda tentativa falhar, retornar um board vazio como fallback
-              console.error('RESETBOARD: Todas as tentativas falharam, retornando board vazio');
-              return of({
-                id: boardId,
-                title: boardTitle,
-                columns: []
-              });
-            })
-          );
-        }
-        
-        return this.handleError('resetBoard', {
-          id: boardId,
-          title: boardTitle,
-          columns: []
-        })(error);
+        console.error(`RESETBOARD: Erro ao resetar board ${boardId}:`, error);
+        return throwError(() => error);
       })
     );
   }

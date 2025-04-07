@@ -19,6 +19,11 @@ import { importProvidersFrom } from "@angular/core"
 // Obter a configuração do Firebase de window.ENV ou fallback para environment
 const firebaseConfig = (window as any).ENV?.firebase || environment.firebase;
 
+// Verificar se as configurações do Firebase estão disponíveis
+if (!firebaseConfig.apiKey) {
+  console.error('ERRO: Configurações do Firebase não estão disponíveis. Verifique o arquivo .env e o runtime-env.js');
+}
+
 // Configuração para desabilitar os avisos de Firebase API fora do contexto de injeção
 (window as any).firebase = {
   ...(window as any).firebase,
@@ -43,10 +48,12 @@ bootstrapApplication(AppComponent, {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideRouter(routes),
     // Firebase
-    provideFirebaseApp(() => firebaseApp),
-    provideAuth(() => getAuth(firebaseApp)),
-    provideFirestore(() => getFirestore(firebaseApp)),
-    provideStorage(() => getStorage(firebaseApp)),
+    importProvidersFrom(
+      provideFirebaseApp(() => firebaseApp),
+      provideAuth(() => getAuth(firebaseApp)),
+      provideFirestore(() => getFirestore(firebaseApp)),
+      provideStorage(() => getStorage(firebaseApp))
+    ),
     // GraphQL
     importProvidersFrom(GraphQLModule),
     // Para permitir a injeção do Apollo

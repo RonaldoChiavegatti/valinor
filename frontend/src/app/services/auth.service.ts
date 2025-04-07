@@ -2,20 +2,20 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, from, of } from 'rxjs';
 import { map, switchMap, tap, catchError } from 'rxjs/operators';
 import { 
-  Auth, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  authState,
   User,
   UserCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
-  updatePassword
+  updatePassword,
+  Auth
 } from '@angular/fire/auth';
 import { Router } from '@angular/router';
 import { environment } from '../../environments/environment';
+import { onAuthStateChanged } from 'firebase/auth';
 
 @Injectable({
   providedIn: 'root'
@@ -51,38 +51,26 @@ export class AuthService {
     }
     
     // Monitorar mudanças no estado de autenticação
-    authState(this.auth).pipe(
-      switchMap(user => {
-        if (user) {
-          this.currentUserSubject.next(user);
-          return from(user.getIdToken());
-        } else {
-          // Verificar no sessionStorage antes de confirmar que não há usuário
-          const sessionToken = sessionStorage.getItem('auth_token');
-          if (sessionToken) {
-            // Manter o token mas não atualizar o usuário
-            return of(sessionToken);
-          }
-          
-          // Realmente não há usuário autenticado
-          this.currentUserSubject.next(null);
-          return of(null);
-        }
-      }),
-      catchError(error => {
-        console.error('Erro ao obter estado de autenticação');
-        return of(null);
-      })
-    ).subscribe(token => {
-      if (token) {
-        this.lastKnownToken = token;
-        this.tokenSubject.next(token);
-        
-        // Salvar o token no sessionStorage para persistência entre recargas de página
-        sessionStorage.setItem('auth_token', token);
+    onAuthStateChanged(this.auth as any, (user) => {
+      if (user) {
+        this.currentUserSubject.next(user);
+        user.getIdToken().then(token => {
+          this.lastKnownToken = token;
+          this.tokenSubject.next(token);
+          sessionStorage.setItem('auth_token', token);
+        }).catch(error => {
+          console.error('Erro ao obter token');
+        });
       } else {
-        // Não limpar o token do sessionStorage aqui para permitir recarregar a página
-        // Somente limpa o token atual
+        // Verificar no sessionStorage antes de confirmar que não há usuário
+        const sessionToken = sessionStorage.getItem('auth_token');
+        if (sessionToken) {
+          // Manter o token mas não atualizar o usuário
+          return;
+        }
+        
+        // Realmente não há usuário autenticado
+        this.currentUserSubject.next(null);
         this.lastKnownToken = null;
         this.tokenSubject.next(null);
       }

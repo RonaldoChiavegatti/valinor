@@ -8,18 +8,6 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Valores padrão para todos os ambientes (desenvolvimento e produção)
-const defaultValues = {
-  GRAPHQL_URL: 'https://kanban-deploy-fmfj.onrender.com/graphql',
-  FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || 'AIzaSyBIFBiPZqegXg9_rlmhA3TvwiCsYmgUTno',
-  FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN || 'kanban-board-bbf3b.firebaseapp.com',
-  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'kanban-board-bbf3b',
-  FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET || 'kanban-board-bbf3b.appspot.com',
-  FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || '347147579688',
-  FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || '1:347147579688:web:f80a0a269d2ed8a680201d',
-  FIREBASE_MEASUREMENT_ID: process.env.FIREBASE_MEASUREMENT_ID || 'G-BGWP5N6DHC'
-};
-
 // Verificar se é ambiente de produção
 const isProd = process.env.NODE_ENV === 'production';
 console.log(`Ambiente de build: ${isProd ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
@@ -29,20 +17,22 @@ console.log('IMPORTANTE: Usando apenas a URL do GraphQL em produção para todos
 function generateEnvironmentContent(isProd) {
   return `// Este arquivo foi gerado automaticamente pelo script build-env-config.js
 // ${isProd ? 'AMBIENTE DE PRODUÇÃO' : 'AMBIENTE DE DESENVOLVIMENTO'}
-// IMPORTANTE: Usando URLs da API em produção para todos os ambientes
+// IMPORTANTE: As configurações sensíveis são carregadas em tempo de execução
 
 export const environment = {
   production: ${isProd},
   useEmulators: false,
-  graphqlUrl: '${defaultValues.GRAPHQL_URL}',
+  graphqlUrl: '${process.env.GRAPHQL_URL || 'https://kanban-deploy-fmfj.onrender.com/graphql'}',
+  // As configurações do Firebase serão carregadas em tempo de execução
   firebase: {
-    apiKey: "${defaultValues.FIREBASE_API_KEY}",
-    authDomain: "${defaultValues.FIREBASE_AUTH_DOMAIN}",
-    projectId: "${defaultValues.FIREBASE_PROJECT_ID}",
-    storageBucket: "${defaultValues.FIREBASE_STORAGE_BUCKET}",
-    messagingSenderId: "${defaultValues.FIREBASE_MESSAGING_SENDER_ID}",
-    appId: "${defaultValues.FIREBASE_APP_ID}",
-    measurementId: "${defaultValues.FIREBASE_MEASUREMENT_ID}"
+    // Estas são apenas referências, os valores reais serão carregados em tempo de execução
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
   }
 };`;
 }
@@ -71,7 +61,17 @@ try {
   // Isso será usado no index.html para injetar variáveis em tempo de execução
   const runtimeEnv = {
     production: isProd,
-    graphqlUrl: defaultValues.GRAPHQL_URL
+    graphqlUrl: process.env.GRAPHQL_URL || 'https://kanban-deploy-fmfj.onrender.com/graphql',
+    // Incluir as configurações do Firebase para serem carregadas em tempo de execução
+    firebase: {
+      apiKey: process.env.FIREBASE_API_KEY || '',
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
+      projectId: process.env.FIREBASE_PROJECT_ID || '',
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+      appId: process.env.FIREBASE_APP_ID || '',
+      measurementId: process.env.FIREBASE_MEASUREMENT_ID || ''
+    }
   };
   
   // Criar diretório de assets se não existir

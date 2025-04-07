@@ -105,24 +105,40 @@ export class BoardService implements OnDestroy {
         if (this.currentUserId && this.currentUserId !== newUserId) {
           console.log('Usuário mudou de', this.currentUserId, 'para', newUserId);
           this.previousUserId = this.currentUserId;
+          
           // Limpar o board atual antes de carregar o board do novo usuário
           this.resetLocalBoard();
+          
+          // Adicionar um pequeno atraso para garantir que o board anterior seja completamente limpo
+          setTimeout(() => {
+            this.currentUserId = newUserId;
+            console.log('ID do usuário para persistência de dados:', this.currentUserId);
+            // Carregar os dados após identificar o usuário
+            this.loadBoardsFromApi();
+          }, 300);
+        } else {
+          this.currentUserId = newUserId;
+          console.log('ID do usuário para persistência de dados:', this.currentUserId);
+          // Carregar os dados após identificar o usuário
+          this.loadBoardsFromApi();
         }
-        
-        this.currentUserId = newUserId;
-        console.log('ID do usuário para persistência de dados:', this.currentUserId);
-        // Carregar os dados após identificar o usuário
-        this.loadBoardsFromApi();
       } else {
         // Se estava logado e agora não está mais
         if (this.currentUserId && this.currentUserId !== 'anonymous') {
           this.previousUserId = this.currentUserId;
           this.resetLocalBoard();
+          
+          // Adicionar um pequeno atraso para garantir que o board anterior seja completamente limpo
+          setTimeout(() => {
+            this.currentUserId = 'anonymous';
+            console.log('Usuário não autenticado. Usando ID anônimo para persistência.');
+            this.loadBoardsFromApi();
+          }, 300);
+        } else {
+          this.currentUserId = 'anonymous';
+          console.log('Usuário não autenticado. Usando ID anônimo para persistência.');
+          this.loadBoardsFromApi();
         }
-        
-        this.currentUserId = 'anonymous';
-        console.log('Usuário não autenticado. Usando ID anônimo para persistência.');
-        this.loadBoardsFromApi();
       }
     });
   }
@@ -130,12 +146,21 @@ export class BoardService implements OnDestroy {
   // Função para limpar o board local quando troca de usuário
   private resetLocalBoard(): void {
     console.log('Limpando board local antes de carregar dados do novo usuário');
+    
+    // Limpar completamente o board atual
     const emptyBoard: Board = {
       id: "",
       title: "Carregando...",
       columns: []
     };
+    
+    // Atualizar o subject com o board vazio
     this.boardSubject.next(emptyBoard);
+    
+    // Forçar a detecção de mudanças para garantir que a UI seja atualizada
+    setTimeout(() => {
+      this.boardSubject.next(emptyBoard);
+    }, 50);
   }
 
   // Função para criar uma cópia profunda (deep clone) de um objeto
@@ -149,239 +174,228 @@ export class BoardService implements OnDestroy {
       console.log(`Troca de usuário detectada: ${this.previousUserId} -> ${this.currentUserId}`);
       console.log('Limpando completamente o board anterior antes de carregar o novo');
       
-      // Resetar completamente o board para eliminar quaisquer vestígios do usuário anterior
-      const emptyBoard: Board = {
-        id: "",
-        title: "Carregando dados do usuário...",
-        columns: []
-      };
-      this.boardSubject.next(emptyBoard);
+      // Limpar o board anterior
+      this.resetLocalBoard();
       
-      // Esperar um momento para garantir que a UI atualize antes de fazer a chamada à API
+      // Limpar o ID do usuário anterior para evitar processamento duplicado
+      this.previousUserId = '';
+      
+      // Adicionar um pequeno atraso para garantir que o board anterior seja completamente limpo
       setTimeout(() => {
+        // Carregar os boards do usuário atual
         this.fetchBoardsFromAPI();
-      }, 100);
+      }, 300);
     } else {
-      // Inicializar com o mockBoard apenas para feedback visual quando não há troca de usuário
-      console.log('Inicializando com mockBoard para feedback visual');
-      this.updateBoardState(this.deepClone(this.mockBoard));
+      // Carregar os boards do usuário atual
       this.fetchBoardsFromAPI();
     }
   }
   
   // Método para extrair a lógica de busca na API e facilitar a manutenção
   private fetchBoardsFromAPI(): void {
-    console.log(`Buscando boards da API para usuário: ${this.currentUserId}`);
-    
-    // Verificar se temos um token de autenticação antes de fazer a chamada
-    const authToken = this.authService.getToken();
-    if (!authToken) {
-      console.warn('Não há token de autenticação disponível. Tentando carregar os boards mesmo assim...');
-    } else {
-      console.log('Token de autenticação disponível para a chamada à API');
+    // Verificar se o usuário está autenticado
+    if (!this.currentUserId || this.currentUserId === 'anonymous') {
+      console.log('Usuário não autenticado. Usando board local.');
+      
+      // Usar o board vazio para desenvolvimento local
+      const emptyBoard = this.createMockBoard();
+      this.boardSubject.next(emptyBoard);
+      return;
     }
     
-    this.boardGraphqlService.getBoards().pipe(
-      tap(boards => {
-        if (Array.isArray(boards)) {
-          console.log(`Obteve ${boards.length} boards da API`);
-          boards.forEach((board, index) => {
-            console.log(`Board ${index + 1}: ID=${board.id}, Título=${board.title}, UserId=${board.userId || 'não definido'}, Colunas=${board.columns?.length || 0}`);
-          });
-        } else {
-          console.warn('Resposta da API não é um array:', boards);
-        }
-      }),
-      catchError(error => {
-        console.error('Erro ao carregar boards:', error);
-        
-        // Verificar se é um erro de autenticação
-        if (error.message?.includes('unauthorized') || 
-            error.message?.includes('Unauthorized') || 
-            error.networkError?.status === 401) {
-          console.warn('Erro de autenticação. Verifique se o usuário está logado corretamente.');
-          this.toastService.show('Erro de autenticação. Faça login novamente.', 'error');
-        } else {
-          this.toastService.show('Erro ao carregar dados do servidor. Criando um novo board.', 'warning');
-        }
-        
-        // Caso de erro, criamos um novo board a partir do modelo
-        return this.boardGraphqlService.createBoard(this.mockBoard.title).pipe(
-          catchError(createError => {
-            console.error('Erro ao criar board:', createError);
-            this.toastService.show('Erro ao criar quadro no servidor.', 'error');
-            return of(this.deepClone(this.mockBoard));
-          })
-        );
-      }),
-      switchMap(boards => {
-        if (Array.isArray(boards) && boards.length > 0) {
-          // Verificar se algum dos boards pertence ao usuário atual
-          const userBoards = boards.filter(board => board.userId === this.currentUserId);
-          if (userBoards.length > 0) {
-            console.log(`Encontrado ${userBoards.length} boards pertencentes ao usuário ${this.currentUserId}`);
-            return of(userBoards[0]);
+    // Verificar se o usuário mudou durante a chamada à API
+    const currentUserForThisCall = this.currentUserId;
+    
+    // Tentar carregar os boards do usuário da API
+    this.boardGraphqlService.getBoards()
+      .pipe(
+        catchError(error => {
+          console.error('Erro ao carregar boards da API:', error);
+          
+          // Verificar se é um erro de autenticação
+          if (error.message && error.message.includes('autenticação')) {
+            this.toastService.show('Erro de autenticação. Faça login novamente.', 'error');
+            return of(null);
           }
           
-          // Se não encontrar boards específicos do usuário, usar o primeiro
-          console.log('Board encontrado na API mas não pertence ao usuário atual. Usando primeiro board:', boards[0]);
-          return of(boards[0]);
-        } else if (!Array.isArray(boards) && boards.id) {
-          // Se recebemos um único board (do createBoard)
-          console.log('Board único recebido (provavelmente novo):', boards);
-          return of(boards);
-        } else {
-          // Se não existir nenhum board, cria um novo baseado no mockBoard
-          console.log('Nenhum quadro encontrado na API. Criando um novo...');
-          return this.boardGraphqlService.createBoard(this.mockBoard.title).pipe(
-            tap(newBoard => {
-              console.log('Novo board criado na API com ID:', newBoard.id);
-            }),
-            catchError(error => {
-              console.error('Erro ao criar board:', error);
-              this.toastService.show('Erro ao criar quadro no servidor.', 'error');
-              return of(this.deepClone(this.mockBoard));
-            })
-          );
-        }
-      })
-    ).subscribe({
-      next: (board) => {
-        console.log('Board carregado/criado da API:', board);
-        
-        if (!board || !board.columns) {
-          console.error('Board recebido da API é inválido:', board);
-          this.toastService.show('Board recebido da API é inválido, usando board local.', 'warning');
-          this.updateBoardState(this.deepClone(this.mockBoard));
+          // Para outros erros, usar o board local
+          this.toastService.show('Erro ao carregar dados do servidor. Criando um novo board.', 'warning');
+          return of(null);
+        })
+      )
+      .subscribe(boards => {
+        // Verificar se o usuário mudou durante a chamada à API
+        if (currentUserForThisCall !== this.currentUserId) {
+          console.log(`Usuário mudou durante a chamada à API (${currentUserForThisCall} -> ${this.currentUserId}). Ignorando resultados.`);
           return;
         }
         
-        // Log para debug
-        console.log(`Atualizando board: ID=${board.id}, UserId=${board.userId || 'não definido'}, CurrentUserId=${this.currentUserId}`);
+        if (!boards || boards.length === 0) {
+          console.log('Nenhum board encontrado. Criando um novo board vazio.');
+          
+          // Criar um novo board vazio
+          const newBoard = this.createMockBoard();
+          this.boardSubject.next(newBoard);
+          
+          // Tentar criar o board no servidor em segundo plano
+          this.boardGraphqlService.createBoard(newBoard.title)
+            .pipe(
+              catchError(error => {
+                console.error('Erro ao criar board no servidor:', error);
+                this.toastService.show('Erro ao criar quadro no servidor.', 'error');
+                return of(null);
+              })
+            )
+            .subscribe(result => {
+              // Verificar se o usuário mudou durante a chamada à API
+              if (currentUserForThisCall !== this.currentUserId) {
+                console.log(`Usuário mudou durante a criação do board (${currentUserForThisCall} -> ${this.currentUserId}). Ignorando resultados.`);
+                return;
+              }
+              
+              if (result) {
+                console.log('Board criado no servidor com sucesso:', result);
+                // Atualizar o ID do board local com o ID do servidor
+                const updatedBoard = { ...newBoard, id: result.id };
+                this.boardSubject.next(updatedBoard);
+              }
+            });
+          
+          return;
+        }
         
-        // Atualizar o board no estado local
-        this.updateBoardState(board);
+        // Se encontrou boards, usar o primeiro
+        const board = boards[0];
         
-        // Informar o usuário que os dados foram carregados com sucesso
+        // Verificar se o board é válido
+        if (!board || !board.id) {
+          console.error('Board recebido da API é inválido:', board);
+          this.toastService.show('Board recebido da API é inválido, usando board local.', 'warning');
+          
+          // Usar o board vazio para desenvolvimento local
+          const emptyBoard = this.createMockBoard();
+          this.boardSubject.next(emptyBoard);
+          return;
+        }
+        
+        // Usar o board da API sem inicializar com colunas mockadas
+        console.log('Board carregado da API:', board);
+        this.boardSubject.next(board);
+        // Mostrar apenas uma notificação de sucesso ao carregar os dados
         this.toastService.show('Dados carregados com sucesso!', 'success');
-        
-        // Atualizar o userId no board se estiver vazio ou diferente do usuário atual
-        if (!board.userId || board.userId !== this.currentUserId) {
-          console.log(`Board com userId ${board.userId || 'não definido'}. Atualizando para o usuário atual: ${this.currentUserId}`);
-          this.boardGraphqlService.updateBoard(board.id, { title: board.title }).pipe(
-            catchError(error => {
-              console.error('Erro ao atualizar userId do board:', error);
-              return of(null);
-            })
-          ).subscribe();
-        }
-        
-        // Se o board não tem colunas, inicia a criação das colunas mockadas
-        if (board.columns.length === 0) {
-          console.log('Board está vazio. Criando colunas iniciais...');
-          this.initializeBoardWithMockColumns(board.id);
-        } else {
-          console.log('Board já tem colunas:', board.columns.length);
-        }
+      });
+  }
+
+  // Método para inicializar o board com colunas mockadas (apenas para desenvolvimento)
+  private initializeBoardWithMockColumns(boardId: string): void {
+    // Verificar se o usuário mudou durante a inicialização
+    const currentUserForThisCall = this.currentUserId;
+    
+    // Criar colunas mockadas
+    const mockColumns: Column[] = [
+      {
+        id: '1',
+        title: 'A Fazer',
+        cards: []
       },
-      error: (error) => {
-        console.error('Erro ao processar board:', error);
-        this.toastService.show('Erro ao processar dados do servidor. Usando board local.', 'error');
-        // Em caso de erro, usar o board mockado
-        this.updateBoardState(this.deepClone(this.mockBoard));
+      {
+        id: '2',
+        title: 'Em Progresso',
+        cards: []
+      },
+      {
+        id: '3',
+        title: 'Concluído',
+        cards: []
+      }
+    ];
+    
+    // Criar um novo board com as colunas mockadas
+    const mockBoard: Board = {
+      id: boardId,
+      title: 'Meu Quadro Kanban',
+      userId: currentUserForThisCall,
+      columns: mockColumns
+    };
+    
+    // Atualizar o board local
+    this.boardSubject.next(mockBoard);
+    
+    // Mostrar mensagem de desenvolvimento
+    console.log('Board inicializado com colunas mockadas (apenas para desenvolvimento)');
+  }
+  
+  // Método para inicializar o board com cards mockados
+  private initializeBoardWithMockCards(): void {
+    // Verificar se o usuário mudou durante a inicialização
+    const currentUserForThisCall = this.currentUserId;
+    
+    // Obter o board atual
+    const currentBoard = this.boardSubject.value;
+    
+    // Verificar se o board ainda existe e pertence ao usuário atual
+    if (!currentBoard || currentBoard.id !== this.currentUserId) {
+      console.log('Board não encontrado ou usuário mudou durante a inicialização dos cards. Interrompendo.');
+      return;
+    }
+    
+    // Criando os cards uma por uma do mockBoard
+    this.mockBoard.columns.forEach((column, columnIndex) => {
+      // Encontrar a coluna correspondente no board atual
+      const targetColumn = currentBoard.columns.find(col => col.title === column.title);
+      
+      if (targetColumn) {
+        column.cards.forEach((card, cardIndex) => {
+          setTimeout(() => {
+            // Verificar se o usuário mudou durante a inicialização
+            if (currentUserForThisCall !== this.currentUserId) {
+              console.log(`Usuário mudou durante a inicialização dos cards (${currentUserForThisCall} -> ${this.currentUserId}). Interrompendo.`);
+              return;
+            }
+            
+            // Verificar se o board ainda existe e pertence ao usuário atual
+            const updatedBoard = this.boardSubject.value;
+            if (!updatedBoard || updatedBoard.id !== this.currentUserId) {
+              console.log('Board não encontrado ou usuário mudou durante a inicialização dos cards. Interrompendo.');
+              return;
+            }
+            
+            // Encontrar a coluna correspondente no board atualizado
+            const updatedTargetColumn = updatedBoard.columns.find(col => col.id === targetColumn.id);
+            if (!updatedTargetColumn) {
+              console.log(`Coluna ${targetColumn.title} não encontrada no board atualizado. Interrompendo.`);
+              return;
+            }
+            
+            const cardInput: Omit<Card, 'id'> = {
+              title: card.title,
+              description: card.description,
+              order: cardIndex,
+              tags: card.tags || []
+            };
+            
+            // Adicionando card
+            this.addCard(updatedTargetColumn.id, cardInput);
+          }, cardIndex * 300); // Espaçamento de tempo entre cada adição de card
+        });
       }
     });
   }
 
-  // Método para inicializar o board com colunas mockadas
-  private initializeBoardWithMockColumns(boardId: string): void {
-    // Criando as colunas uma por uma do mockBoard
-    this.mockBoard.columns.forEach((column, index) => {
-      setTimeout(() => {
-        const columnInput: Omit<Column, 'id' | 'cards'> = {
-          title: column.title,
-          color: column.color,
-          cardLimit: column.cardLimit || 0
-        };
-        
-        // Adicionando coluna
-        this.addColumn(columnInput);
-        
-        // Se for a última coluna, após ela ser adicionada, vamos adicionar os cards
-        if (index === this.mockBoard.columns.length - 1) {
-          setTimeout(() => {
-            this.initializeBoardWithMockCards();
-          }, 1000);
-        }
-      }, index * 500); // Espaçamento de tempo entre cada adição de coluna
-    });
-  }
-  
-  // Método para inicializar as colunas com cards mockados
-  private initializeBoardWithMockCards(): void {
-    const board = this.getBoard();
-    if (!board || !board.columns || board.columns.length === 0) return;
-    
-    // Para cada coluna do mockBoard
-    this.mockBoard.columns.forEach((mockColumn, colIndex) => {
-      // Encontramos a coluna correspondente no board atual
-      const targetColumn = board.columns[colIndex];
-      if (!targetColumn) return;
-      
-      // Para cada card da coluna mockada
-      mockColumn.cards.forEach((mockCard, cardIndex) => {
-        setTimeout(() => {
-          // Garantir que a data esteja no formato correto
-          let formattedDueDate;
-          if (mockCard.dueDate) {
-            formattedDueDate = this.formatDateForGraphQL(mockCard.dueDate);
-          }
-          
-          const cardInput: Omit<Card, 'id'> = {
-            title: mockCard.title,
-            description: mockCard.description,
-            tags: mockCard.tags,
-            dueDate: formattedDueDate,
-            order: cardIndex,
-            attachments: mockCard.attachments
-          };
-          
-          // Adicionando card
-          this.addCard(targetColumn.id, cardInput);
-        }, cardIndex * 300); // Espaçamento de tempo entre cada adição de card
-      });
-    });
-  }
-
+  // Método para criar um board vazio para novos usuários
   private createMockBoard(): Board {
-    // Criar um board mockado para uso offline
-    return {
-      id: "local_" + Date.now(),
-      title: "Meu Quadro Kanban (Offline)",
-      columns: [
-        {
-          id: "col_1",
-          title: "A Fazer",
-          color: "#5BC2E7",
-          cards: [],
-          cardLimit: 10
-        },
-        {
-          id: "col_2",
-          title: "Em Progresso",
-          color: "#9966FF",
-          cards: [],
-          cardLimit: 5
-        },
-        {
-          id: "col_3",
-          title: "Concluído",
-          color: "#47B04B",
-          cards: [],
-          cardLimit: 0
-        }
-      ]
+    // Obter o ID do usuário atual
+    const currentUserId = this.currentUserId;
+    
+    // Criar um board vazio
+    const emptyBoard: Board = {
+      id: currentUserId,
+      title: 'Meu Quadro Kanban',
+      userId: currentUserId,
+      columns: []
     };
+    
+    return emptyBoard;
   }
 
   getBoard(): Board {
@@ -1234,98 +1248,37 @@ export class BoardService implements OnDestroy {
     });
   }
 
-  // Método para limpar os dados do board no localStorage
-  public clearBoardData(): void {
-    console.log('CLEARDBOARDDATA: Iniciando limpeza do quadro');
+  // Método para limpar os dados do board
+  clearBoardData(): void {
+    // Verificar se o usuário mudou durante a limpeza do board
+    const currentUserForThisCall = this.currentUserId;
     
-    const board = this.getBoard();
+    console.log('Limpando dados do board para o usuário:', currentUserForThisCall);
     
-    if (!board || !board.id) {
-      console.error('CLEARDBOARDDATA: Não é possível limpar o board: board inválido');
-      this.toastService.show('Erro ao limpar quadro: board inválido.', 'error');
-      return;
-    }
+    // Limpar o board atual
+    this.resetLocalBoard();
     
-    console.log('CLEARDBOARDDATA: Board encontrado, ID:', board.id, 'Título:', board.title);
-    
-    // Guardar informações essenciais do board
-    const boardId = board.id;
-    const boardTitle = board.title;
-    
-    // Criar cópia do board atual para caso de erro
-    const originalBoard = this.deepClone(board);
-    
-    // Criar um board vazio com o mesmo ID e título para atualização local imediata
-    const emptyBoard: Board = {
-      id: boardId,
-      title: boardTitle,
-      columns: [],
-      userId: board.userId, // Preservar o userId para manter a propriedade no board
-      createdAt: board.createdAt // Preservar a data de criação original
-    };
-    
-    console.log('CLEARDBOARDDATA: Atualizando estado local com board vazio');
-    
-    // Atualizar o estado local primeiro para feedback imediato
-    this.updateBoardState(emptyBoard);
-    
-    console.log('CLEARDBOARDDATA: Chamando resetBoard do GraphQL service');
-    
-    // Enviar requisição para o backend usando a nova mutation resetBoard
-    this.boardGraphqlService.resetBoard(boardId, boardTitle).pipe(
-      tap(response => {
-        console.log('CLEARDBOARDDATA: Resposta recebida do resetBoard:', response);
-      }),
-      catchError(error => {
-        console.error('CLEARDBOARDDATA: Erro ao limpar quadro no servidor:', error);
-        this.toastService.show('Erro ao limpar quadro no servidor. Restaurando estado anterior.', 'error');
-        
-        // Restaurar o estado original em caso de erro
-        this.updateBoardState(originalBoard);
-        
-        // Tentar uma abordagem alternativa se a API falhar
-        setTimeout(() => {
-          console.log('CLEARDBOARDDATA: Tentando abordagem alternativa...');
-          // Tentar a versão antiga que usava updateBoard
-          this.boardGraphqlService.updateBoard(boardId, { title: boardTitle }).subscribe({
-            next: (updatedBoard) => {
-              console.log('CLEARDBOARDDATA: Atualização alternativa bem-sucedida:', updatedBoard);
-              
-              // Garantir que a resposta tenha colunas vazias
-              if (updatedBoard && updatedBoard.columns && updatedBoard.columns.length > 0) {
-                updatedBoard.columns = [];
-              }
-              
-              this.updateBoardState(updatedBoard || emptyBoard);
-              this.toastService.show('Quadro limpo com sucesso!', 'success');
-            },
-            error: (updateError) => {
-              console.error('CLEARDBOARDDATA: Erro na atualização alternativa:', updateError);
-              this.toastService.show('Não foi possível limpar o quadro. Tente novamente mais tarde.', 'error');
-            }
-          });
-        }, 1000);
-        
-        return of(null);
-      })
-    ).subscribe(updatedBoard => {
-      if (updatedBoard) {
-        console.log('CLEARDBOARDDATA: Board resetado com sucesso, atualizando estado local');
-        
-        // Garantir que as colunas estão realmente vazias (dupla verificação)
-        if (updatedBoard.columns && updatedBoard.columns.length > 0) {
-          console.warn('CLEARDBOARDDATA: Board ainda contém colunas após reset, forçando remoção local');
-          updatedBoard.columns = [];
-        }
-        
-        // Atualizar o board com os dados do servidor
-        this.updateBoardState(updatedBoard);
-        this.toastService.show('Quadro limpo com sucesso!', 'success');
-      } else {
-        console.log('CLEARDBOARDDATA: Nenhum board retornado do servidor');
-        // Manter o estado vazio que já atualizamos localmente
+    // Adicionar um pequeno atraso para garantir que o board seja completamente limpo
+    setTimeout(() => {
+      // Verificar se o usuário mudou durante a limpeza do board
+      if (currentUserForThisCall !== this.currentUserId) {
+        console.log(`Usuário mudou durante a limpeza do board (${currentUserForThisCall} -> ${this.currentUserId}). Interrompendo.`);
+        return;
       }
-    });
+      
+      // Criar um novo board vazio
+      const emptyBoard: Board = {
+        id: this.currentUserId,
+        title: 'Meu Quadro Kanban',
+        columns: []
+      };
+      
+      // Atualizar o subject com o board vazio
+      this.boardSubject.next(emptyBoard);
+      
+      // Mostrar uma notificação de sucesso
+      this.toastService.show('Quadro limpo com sucesso!', 'success');
+    }, 300);
   }
 
   // Método público para forçar o carregamento do board

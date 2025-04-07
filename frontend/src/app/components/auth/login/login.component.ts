@@ -246,21 +246,15 @@ export class LoginComponent {
     // Aguardar um breve momento para garantir que a limpeza seja concluída
     setTimeout(() => {
       this.loading = true;
-      this.toastService.show('Tentando reconectar...', 'info');
-      
       this.authService.login(email, password)
         .subscribe({
           next: () => {
             this.router.navigate(['/board']);
-            this.toastService.show('Login realizado com sucesso!', 'success');
           },
           error: (retryError) => {
             console.error('Erro na segunda tentativa de login:', retryError);
             this.loading = false;
             this.toastService.show('Não foi possível fazer login. Por favor, tente novamente mais tarde.', 'error');
-          },
-          complete: () => {
-            this.loading = false;
           }
         });
     }, 1000);

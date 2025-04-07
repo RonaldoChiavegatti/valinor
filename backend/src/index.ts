@@ -64,8 +64,7 @@ async function bootstrap() {
       return err;
     },
     // Configurações importantes para o playground funcionar (específicas para Apollo Server 3.x)
-    introspection: true,
-    csrfPrevention: false
+    introspection: true
   });
 
   await server.start();

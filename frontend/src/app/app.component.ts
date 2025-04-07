@@ -230,7 +230,8 @@ export class AppComponent implements OnInit {
     this.isMenuOpen = false;
     this.authService.logout().subscribe({
       next: () => {
-        this.toastService.show('Logout realizado com sucesso!', 'success');
+        // Don't show a success toast for logout to reduce notification flooding
+        // this.toastService.show('Logout realizado com sucesso!', 'success');
       },
       error: (error) => {
         console.error('Erro ao fazer logout:', error);

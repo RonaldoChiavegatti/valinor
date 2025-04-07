@@ -33,6 +33,7 @@ export class BoardComponent implements OnInit, OnDestroy {
   private boardSubscription: Subscription | null = null;
   private authSubscription: Subscription | null = null;
   public currentUser: User | null = null;
+  private isFirstLoad = true;
 
   constructor(
     private boardService: BoardService,
@@ -105,7 +106,11 @@ export class BoardComponent implements OnInit, OnDestroy {
         // Adicionar verificação para caso especial de board vazio
         if (board.columns.length === 0 && !this.isLoading) {
           console.log('BoardComponent: Board está vazio, sugerindo adicionar colunas');
-          this.toastService.show('Seu quadro está vazio. Adicione colunas usando o botão "Adicionar Coluna".', 'info');
+          // Only show this info toast once when the board is first loaded
+          if (this.isFirstLoad) {
+            this.toastService.show('Seu quadro está vazio. Adicione colunas usando o botão "Adicionar Coluna".', 'info');
+            this.isFirstLoad = false;
+          }
         }
         
         // Marcar como carregado
@@ -471,47 +476,22 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
   
   confirmReset(): void {
-    console.log('CONFIRMRESET: Iniciando processo de limpeza do quadro');
-    
-    // Mostrar indicação de carregamento
+    this.showResetConfirmation = false;
     this.isLoading = true;
     
-    // Fechar o modal de confirmação
-    this.showResetConfirmation = false;
+    // Don't show the "Limpando o quadro" toast to reduce notification flooding
+    // this.toastService.show('Limpando o quadro...', 'info');
     
-    console.log('CONFIRMRESET: Modal fechado, isLoading =', this.isLoading);
-    
-    // Mostrar mensagem informativa
-    this.toastService.show('Limpando o quadro...', 'info');
-    
-    console.log('CONFIRMRESET: Chamando clearBoardData()');
-    
-    // Armazenar o título do quadro atual para preservá-lo
-    const boardTitle = this.board.title;
-    
-    // Limpar os dados do board (isso agora comunicará com o backend)
+    // Call the clearBoardData method
     this.boardService.clearBoardData();
     
-    console.log('CONFIRMRESET: Após chamada a clearBoardData(), atualizando listas conectadas');
-    
-    // Atualizar listas conectadas
-    this.updateConnectedLists();
-    
-    console.log('CONFIRMRESET: Processo de limpeza iniciado, aguardando atualização do subscriber');
-    
-    // Verificar após um curto período se o board foi realmente limpo
+    // The board will be updated through the subscription in loadBoard()
+    // We'll just show a success message after a short delay
     setTimeout(() => {
-      const currentBoard = this.boardService.getBoard();
-      if (currentBoard.columns.length > 0) {
-        console.warn('CONFIRMRESET: Board ainda tem colunas após timeout. Tentando forçar atualização');
-        // Força uma atualização do board se ainda houver colunas
-        this.loadBoard();
-      } else {
-        console.log('CONFIRMRESET: Limpeza concluída com sucesso');
-        this.isLoading = false;
-        this.toastService.show('Quadro limpo com sucesso!', 'success');
-      }
-    }, 2000);
+      this.isLoading = false;
+      this.cdr.detectChanges();
+      this.toastService.show('Quadro limpo com sucesso!', 'success');
+    }, 1000);
   }
 }
 

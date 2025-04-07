@@ -1,36 +1,30 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Angular Kanban Board</title>
+  <title>Página não encontrada - Kanban Board</title>
+  <base href="/kanban-entrega/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
   <script>
-    // Lógica de redirecionamento SPA para GitHub Pages
+    // Redirecionamento para GitHub Pages SPA
     (function() {
-      // Pegar o path atual depois do domínio
-      const path = window.location.pathname;
-      
-      // Extrair o repositório base do pathname (para GitHub Pages)
-      const repo = '/kanban-entrega/';
-      
-      // URL base (domínio + repo)
-      const baseUrl = window.location.origin + repo;
-      
-      // Hash URL para Angular router
-      const hashUrl = '#/' + path
-        .replace(repo, '')  // Remover o prefixo do repositório 
-        .replace(/^\//, ''); // Remover barra inicial se existir
-      
-      // Construir URL completa de redirecionamento
-      const redirectUrl = baseUrl + hashUrl + window.location.search;
-      
-      // Redirecionar para a página principal com o hash correto
-      window.location.href = redirectUrl;
+      var segmentCount = 1;
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
+        l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
     })();
   </script>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
 </head>
 <body>
-  Redirecionando...
+  <h1>Página não encontrada</h1>
+  <p>A página que você está procurando não existe ou foi movida.</p>
+  <p>Redirecionando para a página inicial...</p>
 </body>
 </html> 

@@ -11,8 +11,8 @@ import { inject } from '@angular/core';
 export function createApollo(httpLink: HttpLink, authService: AuthService) {
   console.log('Inicializando Apollo GraphQL...');
   
-  // Sempre usar a URL de produção da Render
-  const graphqlUrl = 'https://kanban-deploy-fmfj.onrender.com/graphql';
+  // Obter a URL do GraphQL de window.ENV ou fallback para environment
+  const graphqlUrl = (window as any).ENV?.graphqlUrl || environment.graphqlUrl;
   console.log('Usando GraphQL URL:', graphqlUrl);
   
   // Criar um link para a API GraphQL
@@ -51,6 +51,9 @@ export function createApollo(httpLink: HttpLink, authService: AuthService) {
       },
     };
   });
+
+  // Combinar os links
+  const link = ApolloLink.from([authLink, errorLink, http]);
 
   // Configurar o cache
   const cache = new InMemoryCache({
@@ -117,17 +120,14 @@ export function createApollo(httpLink: HttpLink, authService: AuthService) {
   });
 
   return {
-    link: ApolloLink.from([errorLink, authLink, http]),
+    link,
     cache,
     defaultOptions: {
-      query: {
-        fetchPolicy: 'network-only',
-        errorPolicy: 'all',
-      },
-      mutate: {
-        errorPolicy: 'all',
-      },
       watchQuery: {
+        fetchPolicy: 'network-only',
+        errorPolicy: 'ignore',
+      },
+      query: {
         fetchPolicy: 'network-only',
         errorPolicy: 'all',
       },
