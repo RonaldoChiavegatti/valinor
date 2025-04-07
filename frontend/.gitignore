@@ -55,3 +55,7 @@ environments/environment.staging.ts
 .firebase/
 firebase-debug.log
 *-firebase-adminsdk-*.json
+
+# Arquivos de configuração sensíveis
+src/assets/firebase-config.js
+firebase-config.js
