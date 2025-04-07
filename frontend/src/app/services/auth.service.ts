@@ -62,17 +62,13 @@ export class AuthService {
           console.error('Erro ao obter token');
         });
       } else {
-        // Verificar no sessionStorage antes de confirmar que não há usuário
-        const sessionToken = sessionStorage.getItem('auth_token');
-        if (sessionToken) {
-          // Manter o token mas não atualizar o usuário
-          return;
-        }
-        
-        // Realmente não há usuário autenticado
+        // Sempre atualizar o estado do usuário para null quando não há usuário autenticado
         this.currentUserSubject.next(null);
         this.lastKnownToken = null;
         this.tokenSubject.next(null);
+        
+        // Limpar o token do sessionStorage
+        sessionStorage.removeItem('auth_token');
       }
     });
   }
@@ -207,8 +203,11 @@ export class AuthService {
           // Limpar o usuário no subject
           this.currentUserSubject.next(null);
           
-          // Redirecionar para a página de login
-          this.router.navigateByUrl('/login');
+          // Adicionar um pequeno atraso para garantir que o estado seja atualizado antes do redirecionamento
+          setTimeout(() => {
+            // Redirecionar para a página de login
+            this.router.navigateByUrl('/login');
+          }, 100);
         }),
         catchError(error => {
           console.error('Erro ao fazer logout');
@@ -317,44 +316,7 @@ export class AuthService {
   }
 
   get isLoggedIn(): Observable<boolean> {
-    // Verificar primeiro se o usuário já está autenticado na sessão
-    if (this.auth.currentUser) {
-      return of(true);
-    }
-    
-    // Verificar se temos um token válido no sessionStorage
-    const sessionToken = sessionStorage.getItem('auth_token');
-    if (sessionToken) {
-      return of(true);
-    }
-    
-    // Verificar no localStorage do Firebase
-    try {
-      const storageKey = `firebase:authUser:${this.getFirebaseConfig()}:[DEFAULT]`;
-      const userDataStr = localStorage.getItem(storageKey);
-      
-      if (userDataStr) {
-        try {
-          const userData = JSON.parse(userDataStr);
-          if (userData && userData.stsTokenManager && userData.stsTokenManager.accessToken) {
-            const expirationTime = userData.stsTokenManager.expirationTime;
-            const currentTime = Date.now();
-            
-            if (expirationTime > currentTime) {
-              // Salvar também no sessionStorage para futuros acessos
-              sessionStorage.setItem('auth_token', userData.stsTokenManager.accessToken);
-              return of(true);
-            }
-          }
-        } catch (e) {
-          console.error('Erro ao processar dados');
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao verificar autenticação');
-    }
-    
-    // Por último, verificar com o observable do Firebase Auth
+    // Simplificar para usar apenas o observable currentUser$
     return this.currentUser$.pipe(
       map(user => !!user)
     );

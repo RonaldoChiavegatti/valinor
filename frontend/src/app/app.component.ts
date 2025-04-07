@@ -1,10 +1,11 @@
-import { Component, OnInit } from "@angular/core"
+import { Component, OnInit, OnDestroy } from "@angular/core"
 import { CommonModule } from "@angular/common"
 import { RouterModule } from "@angular/router"
 import { AuthService } from "./services/auth.service"
 import { ToastComponent } from "./components/toast/toast.component"
 import { ToastService } from "./services/toast.service"
 import { User } from "@angular/fire/auth"
+import { Subscription } from "rxjs"
 
 @Component({
   selector: "app-root",
@@ -197,12 +198,13 @@ import { User } from "@angular/fire/auth"
   `,
   ],
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = "angular-kanban"
   isLoggedIn$: any;
   user$: any;
   currentUser: User | null = null;
   isMenuOpen = false;
+  private userSubscription: Subscription;
 
   constructor(
     private authService: AuthService,
@@ -211,12 +213,18 @@ export class AppComponent implements OnInit {
     this.isLoggedIn$ = this.authService.isLoggedIn;
     this.user$ = this.authService.currentUser$;
     
-    this.authService.currentUser$.subscribe(user => {
+    this.userSubscription = this.authService.currentUser$.subscribe(user => {
       this.currentUser = user;
     });
   }
 
   ngOnInit(): void {}
+
+  ngOnDestroy(): void {
+    if (this.userSubscription) {
+      this.userSubscription.unsubscribe();
+    }
+  }
 
   getUserEmail(): string {
     return this.currentUser?.email || '';
@@ -230,6 +238,7 @@ export class AppComponent implements OnInit {
     this.isMenuOpen = false;
     this.authService.logout().subscribe({
       next: () => {
+        this.currentUser = null;
         // Don't show a success toast for logout to reduce notification flooding
         // this.toastService.show('Logout realizado com sucesso!', 'success');
       },
